@@ -41,15 +41,6 @@ pub fn establish_pool() -> SqlitePool {
     r2d2::Pool::builder().build(manager).expect("Failed to create pool.")
 }
 
-// pub fn establish_connection() -> SqliteConnection {
-//     dotenv().ok();
-
-//     let database_url = env::var("DATABASE_URL")
-//         .expect("DATABASE_URL must be set");
-//     SqliteConnection::establish(&database_url)
-//         .expect(&format!("Error connecting to {}", database_url))
-// }
-
 struct Database {
     pool: SqlitePool
 }
