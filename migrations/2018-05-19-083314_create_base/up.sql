@@ -1,31 +1,33 @@
 CREATE TABLE projects (
-  id INT NOT NULL PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   slug TEXT NOT NULL UNIQUE
 );
 
+CREATE INDEX project_slugs ON projects (slug);
+
 CREATE TABLE users (
-  id INT NOT NULL PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE statuses (
-  id INT NOT NULL PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   status_name TEXT NOT NULL
 );
 
 CREATE TABLE categories (
-  id INT NOT NULL PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   category_name TEXT NOT NULL
 );
 
 CREATE TABLE issues (
-  id INT NOT NULL AUTOINCREMENT,
-  project_id INT NOT NULL,
-  issue_type INT NOT NULL,
-  created_at INT NOT NULL,
-  created_by_user_id INT NOT NULL,
-  status_id INT NOT NULL DEFAULT 0,
-  category_id INT,
+  id INTEGER NOT NULL,
+  project_id INTEGER NOT NULL,
+  issue_type INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  created_by_user_id INTEGER NOT NULL,
+  status_id INTEGER NOT NULL DEFAULT 0,
+  category_id INTEGER,
 
   title TEXT NOT NULL,
   description TEXT NOT NULL,
@@ -38,8 +40,8 @@ CREATE TABLE issues (
 );
 
 CREATE TABLE issue_assignees (
-  issue_id INT NOT NULL,
-  user_id INT NOT NULL,
+  issue_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
 
   FOREIGN KEY (issue_id) REFERENCES issues (id),
   FOREIGN KEY (user_id) REFERENCES users (id),
@@ -47,13 +49,13 @@ CREATE TABLE issue_assignees (
 );
 
 CREATE TABLE labels (
-  id INT PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   label TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE issue_labels (
-  issue_id INT NOT NULL,
-  label_id INT NOT NULL,
+  issue_id INTEGER NOT NULL,
+  label_id INTEGER NOT NULL,
 
   FOREIGN KEY (issue_id) REFERENCES issues (id),
   FOREIGN KEY (label_id) REFERENCES labels (id),
@@ -61,21 +63,21 @@ CREATE TABLE issue_labels (
 );
 
 CREATE TABLE issue_comments (
-  id INT NOT NULL PRIMARY KEY AUTOINCREMENT,
-  issue_id INT NOT NULL,
-  user_id INT NOT NULL,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  issue_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
   comment TEXT NOT NULL,
-  created_at INT NOT NULL,
-  modified_at INT,
+  created_at INTEGER NOT NULL,
+  modified_at INTEGER,
 
   FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
 CREATE TABLE issue_histories (
-  issue_id INT NOT NULL,
-  project_id INT NOT NULL,
-  ts INT NOT NULL,
-  event_type INT NOT NULL,
+  issue_id INTEGER NOT NULL,
+  project_id INTEGER NOT NULL,
+  ts INTEGER NOT NULL,
+  event_type INTEGER NOT NULL,
 
   FOREIGN KEY (issue_id) REFERENCES issues (id),
   FOREIGN KEY (project_id) REFERENCES issues (project_id),

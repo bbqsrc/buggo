@@ -1,4 +1,4 @@
-use super::schema::issues;
+use super::schema::{issues, projects};
 
 #[derive(Queryable, Insertable, Debug, Builder)]
 #[table_name = "issues"]
@@ -12,4 +12,11 @@ pub struct Issue {
     pub category_id: Option<i32>,
     pub title: String,
     pub description: String,
+}
+
+#[derive(Queryable, Insertable, Debug, Builder)]
+#[table_name = "projects"]
+pub struct Project {
+    pub id: i32,
+    pub slug: String
 }

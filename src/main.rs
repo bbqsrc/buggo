@@ -65,27 +65,46 @@ graphql_object!(Database: Database as "Query" |&self| {
     description: "The root query object of the schema"
 
     field issue(
-        id: String as "the issue id"
+        project_id: String as "project id associated with issue",
+        issue_id: i32 as "the issue id"
     ) -> FieldResult<graphql::models::Issue> {
+        use schema::issues::dsl as issues;
+        use schema::projects::dsl as projects;
+
         let db = self.pool.get()?;
-        
-        Ok(graphql::models::Issue {
-            id: 42,
-            title: "Test".to_owned(),
-            description: "Hahha".to_owned()
-        })
+
+        let project: models::Project = schema::projects::table
+            .filter(projects::slug.eq(project_id))
+            .get_result(&*db)?;
+
+        let issue: models::Issue = schema::issues::table
+            .filter(issues::id.eq(issue_id)
+                .and(issues::project_id.eq(&project.id)))
+            .get_result(&*db)?;
+            
+        Ok(graphql::models::Issue::from_model(&project, &issue))
     }
 
     field issues(
         project_id: String as "the project id"
     ) -> FieldResult<Vec<graphql::models::Issue>> {
-        use schema::issues::dsl::*;
+        use schema::issues::dsl as issues;
+        use schema::projects::dsl as projects;
 
         let db = self.pool.get()?;
-        let records: Vec<models::Issue> = schema::issues::table.load(&*db).expect("Result!");
+
+        let project: models::Project = schema::projects::table
+            .filter(projects::slug.eq(project_id))
+            .get_result(&*db)?;
+
+        let records: Vec<models::Issue> = schema::issues::table
+            .filter(issues::project_id.eq(&project.id))
+            .load(&*db)
+            .expect("Result!");
+            
         let result: Vec<graphql::models::Issue> = records
             .into_iter()
-            .map(|r| graphql::models::Issue::from_model(r))
+            .map(|r| graphql::models::Issue::from_model(&project, &r))
             .collect();
         Ok(result)
     }

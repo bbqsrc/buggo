@@ -4,16 +4,18 @@ use ::models;
 #[graphql(description="An issue")]
 pub struct Issue {
     pub id: i32,
+    pub project_id: String,
     pub title: String,
     pub description: String
 }
 
 impl Issue {
-    pub fn from_model(model: models::Issue) -> Issue {
+    pub fn from_model(project: &models::Project, model: &models::Issue) -> Issue {
         IssueBuilder::default()
             .id(model.id)
-            .title(model.title)
-            .description(model.description)
+            .project_id(project.slug.to_owned())
+            .title(model.title.to_owned())
+            .description(model.description.to_owned())
             .build()
             .expect("Model generation can never fail")
     }
