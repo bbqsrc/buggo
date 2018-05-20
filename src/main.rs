@@ -15,6 +15,7 @@ extern crate r2d2_diesel;
 
 use r2d2_diesel::ConnectionManager;
 use r2d2::Pool;
+use diesel::insert_into;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dotenv::dotenv;
@@ -52,7 +53,6 @@ pub fn establish_pool() -> SqlitePool {
 struct Database {
     pool: SqlitePool
 }
-
 impl Database {
     pub fn new() -> Database {
         Database {
@@ -60,6 +60,36 @@ impl Database {
         }
     }
 }
+
+struct DatabaseMutator;
+impl DatabaseMutator {
+    pub fn new() -> DatabaseMutator {
+        DatabaseMutator {}
+    }
+}
+
+graphql_object!(DatabaseMutator: Database as "Mutator" |&self| {
+    description: "Mutation"
+
+    field create_project(
+        &executor,
+        project_id: String as "URL slug to use for new project"
+    ) -> FieldResult<graphql::models::Project> {
+        use schema::projects::dsl as projects;
+
+        let db = executor.context().pool.get()?;
+        let new_project = models::NewProject::new(project_id);
+
+        insert_into(schema::projects::table)
+            .values(&new_project)
+            .execute(&*db)?;
+
+        Ok(graphql::models::ProjectBuilder::default()
+            .id(new_project.slug)
+            .build()
+            .unwrap())
+    }
+});
 
 graphql_object!(Database: Database as "Query" |&self| {
     description: "The root query object of the schema"
@@ -108,9 +138,21 @@ graphql_object!(Database: Database as "Query" |&self| {
             .collect();
         Ok(result)
     }
+
+    field all_projects() -> FieldResult<Vec<graphql::models::Project>> {
+        let db = self.pool.get()?;
+
+        let projects: Vec<models::Project> = schema::projects::table
+            .get_results(&*db)?;
+
+        let result: Vec<_> = projects.into_iter()
+            .map(|p| graphql::models::Project::from_model(&p))
+            .collect();
+        Ok(result)
+    }
 });
 
-type Schema = RootNode<'static, Database, EmptyMutation<Database>>;
+type Schema = RootNode<'static, Database, DatabaseMutator>;
 
 #[get("/")]
 fn graphiql() -> content::Html<String> {
@@ -140,7 +182,7 @@ fn main() {
         .manage(Database::new())
         .manage(Schema::new(
             Database::new(),
-            EmptyMutation::<Database>::new(),
+            DatabaseMutator::new(),
         ))
         .mount(
             "/",

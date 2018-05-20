@@ -14,9 +14,20 @@ pub struct Issue {
     pub description: String,
 }
 
-#[derive(Queryable, Insertable, Debug, Builder)]
-#[table_name = "projects"]
+#[derive(Queryable, Debug, Builder)]
 pub struct Project {
     pub id: i32,
     pub slug: String
+}
+
+#[derive(Insertable)]
+#[table_name = "projects"]
+pub struct NewProject {
+    pub slug: String
+}
+
+impl NewProject {
+    pub fn new(slug: String) -> NewProject {
+        NewProject { slug: slug }
+    }
 }

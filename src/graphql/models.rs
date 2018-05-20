@@ -20,3 +20,17 @@ impl Issue {
             .expect("Model generation can never fail")
     }
 }
+
+#[derive(GraphQLObject, Builder)]
+#[graphql(description="A project")]
+pub struct Project {
+    pub id: String
+}
+
+impl Project {
+    pub fn from_model(project: &models::Project) -> Project {
+        Project {
+            id: project.slug.to_owned()
+        }
+    }
+}
