@@ -1,0 +1,10 @@
+DROP TABLE projects;
+DROP TABLE categories;
+DROP TABLE users;
+DROP TABLE statuses;
+DROP TABLE labels;
+DROP TABLE issues;
+DROP TABLE issue_labels;
+DROP TABLE issue_histories;
+DROP TABLE issue_comments;
+DROP TABLE issue_assignees;
