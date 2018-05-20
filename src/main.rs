@@ -136,25 +136,6 @@ fn post_graphql_handler(
 }
 
 fn main() {
-
-    // let new_issue = models::IssueBuilder::default()
-    //     .id(0)
-    //     .project_id(0)
-    //     .issue_type(0)
-    //     .status_id(0)
-    //     .category_id(0)
-    //     .created_by_user_id(0)
-    //     .created_at(0)
-    //     .title("Hello".to_string())
-    //     .description("Haha.".to_string())
-    //     .build()
-    //     .unwrap();
-    
-    // diesel::insert_into(schema::issues::table)
-    //     .values(&new_issue)
-    //     .execute(&conn)
-    //     .expect("Error saving new issue");
-
     rocket::ignite()
         .manage(Database::new())
         .manage(Schema::new(
