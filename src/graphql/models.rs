@@ -74,3 +74,27 @@ impl Project {
 }
 
 relay_connection!(ProjectConnection, ProjectEdge, Project, Context);
+
+pub struct User {
+    model: models::User
+}
+
+impl User {
+    pub fn new(user: models::User) -> User {
+        User { model: user }
+    }
+}
+
+graphql_object!(User: Context as "User" |&self| {
+    description: "A user"
+
+    field id() -> i32 {
+        self.model.id
+    }
+
+    field username() -> &String {
+        &self.model.username
+    }
+});
+
+relay_connection!(UserConnection, UserEdge, User, Context);

@@ -16,6 +16,7 @@ extern crate r2d2_diesel;
 #[macro_use]
 extern crate juniper_relay;
 extern crate base64;
+extern crate ring;
 
 use r2d2_diesel::ConnectionManager;
 use r2d2::Pool;
@@ -72,19 +73,47 @@ impl DatabaseMutator {
     }
 }
 
-use graphql::models::{ProjectConnection, ProjectEdge};
+use graphql::models::{
+    ProjectConnection,
+    ProjectEdge,
+    UserConnection,
+    UserEdge
+};
 
 graphql_object!(DatabaseMutator: Context as "Mutator" |&self| {
     description: "Mutation"
 
+    field create_user(
+        &executor,
+        username: String,
+        password: String
+    ) -> FieldResult<graphql::models::User> {
+        use schema::users::dsl as users;
+        let username = username.to_lowercase();
+
+        let db = executor.context().pool.get()?;
+        let new_user = models::NewUser::new(username, password, 10000, 16);
+
+        insert_into(schema::users::table)
+            .values(&new_user)
+            .execute(&*db)?;
+
+        let record = schema::users::table
+            .filter(users::username.eq(&new_user.username))
+            .get_result(&*db)?;
+        
+        Ok(graphql::models::User::new(record))
+    }
+
     field create_project(
         &executor,
-        project_id: String as "URL slug to use for new project"
+        project_id: String as "URL slug to use for new project",
+        name: String as "Project name"
     ) -> FieldResult<graphql::models::Project> {
         use schema::projects::dsl as projects;
 
         let db = executor.context().pool.get()?;
-        let new_project = models::NewProject::new(project_id);
+        let new_project = models::NewProject::new(project_id, name);
 
         insert_into(schema::projects::table)
             .values(&new_project)
@@ -123,13 +152,13 @@ graphql_object!(Database: Context as "Query" |&self| {
         Ok(graphql::models::Issue::from_model(&project, &issue))
     }
 
-    field project(&executor, slug: String) -> FieldResult<Option<graphql::models::Project>> {
+    field project(&executor, id: String) -> FieldResult<Option<graphql::models::Project>> {
         use schema::projects::dsl as projects;
 
         let db = executor.context().pool.get()?;
 
         let project: QueryResult<models::Project> = schema::projects::table
-            .filter(projects::slug.eq(&slug))
+            .filter(projects::slug.eq(&id))
             .get_result(&*db);
         
         let record = match project {
@@ -138,6 +167,45 @@ graphql_object!(Database: Context as "Query" |&self| {
         };
 
         Ok(Some(graphql::models::Project::new(record)))
+    }
+
+    field users(&executor, first: i32, after: Option<String>) -> FieldResult<UserConnection> {
+        use schema::users::dsl as users;
+        use std::str;
+
+        let db = executor.context().pool.get()?;
+
+        let query = schema::users::table
+            .order_by(users::username)
+            .limit(first as i64);
+
+        let users: Vec<models::User> = if let Some(v) = after {
+            let cursor_id = base64::decode_config(&v, base64::URL_SAFE)?;
+            let cursor_id = str::from_utf8(&cursor_id)?;
+            query.filter(users::username.gt(&cursor_id)).get_results(&*db)
+        } else {
+            query.get_results(&*db)
+        }?;
+
+        let result: Vec<_> = users.into_iter()
+            .map(|p| {
+                let cursor_id = base64::encode_config(&p.username, base64::URL_SAFE);
+                UserEdge::new(
+                    graphql::models::User::new(p),
+                    cursor_id
+                )
+            })
+            .collect();
+
+        let conn = UserConnection::new(
+            juniper_relay::PageInfo {
+                has_previous_page: false,
+                has_next_page: false
+            },
+            result
+        );
+
+        Ok(conn)
     }
 
     field projects(&executor, first: i32, after: Option<String>) -> FieldResult<ProjectConnection> {

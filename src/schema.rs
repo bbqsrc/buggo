@@ -15,6 +15,7 @@ table! {
 table! {
     issue_comments (id) {
         id -> Integer,
+        issue_id -> Integer,
         user_id -> Integer,
         comment -> Text,
         created_at -> Integer,
@@ -54,8 +55,16 @@ table! {
 
 table! {
     labels (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         label -> Text,
+    }
+}
+
+table! {
+    project_users (project_id, user_id) {
+        project_id -> Integer,
+        user_id -> Integer,
+        role -> Text,
     }
 }
 
@@ -63,6 +72,7 @@ table! {
     projects (id) {
         id -> Integer,
         slug -> Text,
+        name -> Text,
     }
 }
 
@@ -77,6 +87,9 @@ table! {
     users (id) {
         id -> Integer,
         username -> Text,
+        iterations -> Integer,
+        salt -> Binary,
+        credential -> Binary,
     }
 }
 
@@ -87,6 +100,8 @@ joinable!(issues -> categories (category_id));
 joinable!(issues -> projects (project_id));
 joinable!(issues -> statuses (status_id));
 joinable!(issues -> users (created_by_user_id));
+joinable!(project_users -> projects (project_id));
+joinable!(project_users -> users (user_id));
 
 allow_tables_to_appear_in_same_query!(
     categories,
@@ -96,6 +111,7 @@ allow_tables_to_appear_in_same_query!(
     issue_labels,
     issues,
     labels,
+    project_users,
     projects,
     statuses,
     users,
