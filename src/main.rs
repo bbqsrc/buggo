@@ -1,5 +1,6 @@
 #![feature(plugin)]
 #![plugin(rocket_codegen)]
+#![feature(trivial_bounds)]
 
 #[macro_use]
 extern crate diesel;
@@ -14,11 +15,13 @@ extern crate r2d2;
 extern crate r2d2_diesel;
 #[macro_use]
 extern crate juniper_relay;
+extern crate base64;
 
 use r2d2_diesel::ConnectionManager;
 use r2d2::Pool;
 use diesel::insert_into;
 use diesel::prelude::*;
+use diesel::result::QueryResult;
 use diesel::sqlite::SqliteConnection;
 use dotenv::dotenv;
 use std::env;
@@ -120,19 +123,49 @@ graphql_object!(Database: Context as "Query" |&self| {
         Ok(graphql::models::Issue::from_model(&project, &issue))
     }
 
-    field projects(&executor, first: i32, after: String) -> FieldResult<ProjectConnection> {
+    field project(&executor, slug: String) -> FieldResult<Option<graphql::models::Project>> {
+        use schema::projects::dsl as projects;
+
         let db = executor.context().pool.get()?;
 
-        let projects: Vec<models::Project> = schema::projects::table
-            .get_results(&*db)?;
+        let project: QueryResult<models::Project> = schema::projects::table
+            .filter(projects::slug.eq(&slug))
+            .get_result(&*db);
+        
+        let record = match project {
+            Ok(v) => v,
+            Err(_) => return Ok(None)
+        };
 
-        let cursor_id = "test".to_string();
+        Ok(Some(graphql::models::Project::new(record)))
+    }
+
+    field projects(&executor, first: i32, after: Option<String>) -> FieldResult<ProjectConnection> {
+        use schema::projects::dsl as projects;
+        use std::str;
+
+        let db = executor.context().pool.get()?;
+
+        let query = schema::projects::table
+            .order_by(projects::slug)
+            .limit(first as i64);
+
+        let projects: Vec<models::Project> = if let Some(v) = after {
+            let cursor_id = base64::decode_config(&v, base64::URL_SAFE)?;
+            let cursor_id = str::from_utf8(&cursor_id)?;
+            query.filter(projects::slug.gt(&cursor_id)).get_results(&*db)
+        } else {
+            query.get_results(&*db)
+        }?;
 
         let result: Vec<_> = projects.into_iter()
-            .map(|p| ProjectEdge::new(
-                graphql::models::Project::new(p),
-                cursor_id.to_owned()
-            ))
+            .map(|p| {
+                let cursor_id = base64::encode_config(&p.slug, base64::URL_SAFE);
+                ProjectEdge::new(
+                    graphql::models::Project::new(p),
+                    cursor_id
+                )
+            })
             .collect();
 
         let conn = ProjectConnection::new(
