@@ -1,4 +1,9 @@
 use ::models;
+use ::schema;
+use ::Context;
+use juniper::FieldResult;
+use diesel::prelude::*;
+use juniper_relay::PageInfo;
 
 #[derive(GraphQLObject, Builder)]
 #[graphql(description="An issue")]
@@ -21,16 +26,51 @@ impl Issue {
     }
 }
 
-#[derive(GraphQLObject, Builder)]
-#[graphql(description="A project")]
+relay_connection!(IssueConnection, IssueEdge, Issue, Context);
+
 pub struct Project {
-    pub id: String
+    model: models::Project
 }
 
+graphql_object!(Project: Context as "Project" |&self| {
+    description: "A bug tracking project"
+
+    field id() -> &str {
+        &self.model.slug
+    }
+
+    field issues(&executor, first: i32, cursor: Option<String>) -> FieldResult<IssueConnection> {
+        use schema::issues::dsl as issues;
+
+        let db = executor.context().pool.get()?;
+
+        let records: Vec<models::Issue> = schema::issues::table
+            .filter(issues::project_id.eq(&self.model.id))
+            .load(&*db)
+            .expect("Result!");
+            
+        let cursor_id = "test".to_string();
+        let result = records
+            .into_iter()
+            .map(|r| IssueEdge::new(Issue::from_model(&self.model, &r), "?".to_owned()))
+            .collect();
+
+        let conn = IssueConnection {
+            page_info: PageInfo {
+                has_previous_page: false,
+                has_next_page: false
+            },
+            edges: result
+        };
+        
+        Ok(conn)
+    }
+});
+
 impl Project {
-    pub fn from_model(project: &models::Project) -> Project {
-        Project {
-            id: project.slug.to_owned()
-        }
+    pub fn new(project: models::Project) -> Project {
+        Project { model: project }
     }
 }
+
+relay_connection!(ProjectConnection, ProjectEdge, Project, Context);

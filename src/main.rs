@@ -12,6 +12,8 @@ extern crate juniper_rocket;
 extern crate rocket;
 extern crate r2d2;
 extern crate r2d2_diesel;
+#[macro_use]
+extern crate juniper_relay;
 
 use r2d2_diesel::ConnectionManager;
 use r2d2::Pool;
@@ -23,7 +25,7 @@ use std::env;
 
 use rocket::response::content;
 use rocket::State;
-use juniper::{FieldResult, EmptyMutation, RootNode};
+use juniper::{FieldResult, RootNode};
 
 pub mod schema;
 pub mod models;
@@ -41,14 +43,22 @@ pub fn establish_pool() -> SqlitePool {
     r2d2::Pool::builder().build(manager).expect("Failed to create pool.")
 }
 
-struct Database {
+pub struct Context {
     pool: SqlitePool
 }
-impl Database {
-    pub fn new() -> Database {
-        Database {
+impl Context {
+    pub fn new() -> Context {
+        Context {
             pool: establish_pool()
         }
+    }
+}
+impl juniper::Context for Context {}
+
+struct Database;
+impl Database {
+    pub fn new() -> Database {
+        Database {}
     }
 }
 
@@ -59,7 +69,9 @@ impl DatabaseMutator {
     }
 }
 
-graphql_object!(DatabaseMutator: Database as "Mutator" |&self| {
+use graphql::models::{ProjectConnection, ProjectEdge};
+
+graphql_object!(DatabaseMutator: Context as "Mutator" |&self| {
     description: "Mutation"
 
     field create_project(
@@ -75,24 +87,26 @@ graphql_object!(DatabaseMutator: Database as "Mutator" |&self| {
             .values(&new_project)
             .execute(&*db)?;
 
-        Ok(graphql::models::ProjectBuilder::default()
-            .id(new_project.slug)
-            .build()
-            .unwrap())
+        let record = schema::projects::table
+            .filter(projects::slug.eq(&new_project.slug))
+            .get_result(&*db)?;
+
+        Ok(graphql::models::Project::new(record))
     }
 });
 
-graphql_object!(Database: Database as "Query" |&self| {
+graphql_object!(Database: Context as "Query" |&self| {
     description: "The root query object of the schema"
 
     field issue(
+        &executor,
         project_id: String as "project id associated with issue",
         issue_id: i32 as "the issue id"
     ) -> FieldResult<graphql::models::Issue> {
         use schema::issues::dsl as issues;
         use schema::projects::dsl as projects;
 
-        let db = self.pool.get()?;
+        let db = executor.context().pool.get()?;
 
         let project: models::Project = schema::projects::table
             .filter(projects::slug.eq(project_id))
@@ -106,40 +120,30 @@ graphql_object!(Database: Database as "Query" |&self| {
         Ok(graphql::models::Issue::from_model(&project, &issue))
     }
 
-    field issues(
-        project_id: String as "the project id"
-    ) -> FieldResult<Vec<graphql::models::Issue>> {
-        use schema::issues::dsl as issues;
-        use schema::projects::dsl as projects;
-
-        let db = self.pool.get()?;
-
-        let project: models::Project = schema::projects::table
-            .filter(projects::slug.eq(project_id))
-            .get_result(&*db)?;
-
-        let records: Vec<models::Issue> = schema::issues::table
-            .filter(issues::project_id.eq(&project.id))
-            .load(&*db)
-            .expect("Result!");
-            
-        let result: Vec<graphql::models::Issue> = records
-            .into_iter()
-            .map(|r| graphql::models::Issue::from_model(&project, &r))
-            .collect();
-        Ok(result)
-    }
-
-    field all_projects() -> FieldResult<Vec<graphql::models::Project>> {
-        let db = self.pool.get()?;
+    field projects(&executor, first: i32, after: String) -> FieldResult<ProjectConnection> {
+        let db = executor.context().pool.get()?;
 
         let projects: Vec<models::Project> = schema::projects::table
             .get_results(&*db)?;
 
+        let cursor_id = "test".to_string();
+
         let result: Vec<_> = projects.into_iter()
-            .map(|p| graphql::models::Project::from_model(&p))
+            .map(|p| ProjectEdge::new(
+                graphql::models::Project::new(p),
+                cursor_id.to_owned()
+            ))
             .collect();
-        Ok(result)
+
+        let conn = ProjectConnection::new(
+            juniper_relay::PageInfo {
+                has_previous_page: false,
+                has_next_page: false
+            },
+            result
+        );
+
+        Ok(conn)
     }
 });
 
@@ -152,7 +156,7 @@ fn graphiql() -> content::Html<String> {
 
 #[get("/graphql?<request>")]
 fn get_graphql_handler(
-    context: State<Database>,
+    context: State<Context>,
     request: juniper_rocket::GraphQLRequest,
     schema: State<Schema>,
 ) -> juniper_rocket::GraphQLResponse {
@@ -161,7 +165,7 @@ fn get_graphql_handler(
 
 #[post("/graphql", data = "<request>")]
 fn post_graphql_handler(
-    context: State<Database>,
+    context: State<Context>,
     request: juniper_rocket::GraphQLRequest,
     schema: State<Schema>,
 ) -> juniper_rocket::GraphQLResponse {
@@ -170,7 +174,7 @@ fn post_graphql_handler(
 
 fn main() {
     rocket::ignite()
-        .manage(Database::new())
+        .manage(Context::new())
         .manage(Schema::new(
             Database::new(),
             DatabaseMutator::new(),
